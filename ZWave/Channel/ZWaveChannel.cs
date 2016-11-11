@@ -26,6 +26,7 @@ namespace ZWave.Channel
         public TimeSpan ReceiveTimeout = TimeSpan.FromSeconds(2);
         public TimeSpan ResponseTimeout = TimeSpan.FromSeconds(5);
         public event EventHandler<NodeEventArgs> NodeEventReceived;
+        public event EventHandler<LogEventArgs> LogEventReceived;
         public event EventHandler<ErrorEventArgs> Error;
 
         public ZWaveChannel(ISerialPort port)

@@ -75,6 +75,7 @@ namespace ZWave
             }
         }
 
+
         public void Close()
         {
             Channel.Error -= Channel_Error;
@@ -111,6 +112,16 @@ namespace ZWave
                 _nodeID = response[4];
             }
             return _nodeID.Value;
+        }
+
+
+        public async Task<byte> AddNode(bool secure)
+        {
+            var response = await Channel.Send(Function.AddNodeToNetwork);
+            
+
+            return 0;
+
         }
 
         public Task<NodeCollection> DiscoverNodes()
