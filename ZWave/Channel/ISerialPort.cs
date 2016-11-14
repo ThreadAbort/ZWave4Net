@@ -1,10 +1,11 @@
 ﻿using System.IO;
+using Windows.Storage.Streams;
 
 namespace ZWave.Channel
 {
     public interface ISerialPort
     {
-        Stream InputStream { get; }
+        DataReader InputStream { get; }
         Stream OutputStream { get; }
 
         void Close();

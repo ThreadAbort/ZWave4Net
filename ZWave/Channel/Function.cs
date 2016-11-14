@@ -25,6 +25,7 @@ namespace ZWave.Channel
         SendDataAbort = 0x16,
         RFPowerLevelSet = 0x17,
         SendDataMeta = 0x18,
+        GetRandom = 0x1c,
         MemoryGetId = 0x20,
         MemoryGetByte = 0x21,
         MemoryPutByte = 0x22,

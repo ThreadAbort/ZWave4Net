@@ -9,6 +9,10 @@ namespace ZWave.Channel.Protocol
     enum FrameHeader : byte
     {
         /// <summary>
+        /// Timeout on Serial Port after 1 second
+        /// </summary>
+        TMO = 0x00,
+        /// <summary>
         /// Start of frame
         /// </summary>
         SOF = 0x01,

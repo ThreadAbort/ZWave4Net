@@ -66,13 +66,15 @@ namespace ZWave.Channel
             {
                 Log.WriteLine(message);
             }
+            Debug.WriteLine(message);
+            LogEventReceived?.Invoke(this, new LogEventArgs(message));
         }
 
         private void HandleException(Exception ex)
         {
             if (ex is AggregateException)
             {
-                foreach(var inner in ((AggregateException)ex).InnerExceptions)
+                foreach (var inner in ((AggregateException)ex).InnerExceptions)
                 {
                     LogMessage(inner.ToString());
                 }
@@ -81,38 +83,127 @@ namespace ZWave.Channel
             LogMessage(ex.ToString());
         }
 
+        byte[] ReadAppendBuffer = null;
+
         private async void ReadPort(ISerialPort port)
         {
             if (port == null)
                 throw new ArgumentNullException(nameof(port));
 
+
+
+
+            //await port.InputStream.ReadAsyncExact(buffer, 0, 1);
+
             while (true)
             {
                 try
                 {
-                    // wait for message received (blocking)
-                    var message = await Message.Read(port.InputStream).ConfigureAwait(false);
-                    LogMessage($"Received: {message}");
+                    // we are going to start reading Serial from here.
 
-                    // ignore ACK, no processing of ACK needed
-                    if (message == Message.ACK)
-                        continue;
+                    var br = await port.InputStream.LoadAsync(1024);
+                    byte[] buffer = new byte[br];
+                    port.InputStream.ReadBytes(buffer);
+                    if (ReadAppendBuffer != null)
+                        buffer = ReadAppendBuffer.Concat(buffer).ToArray();
 
-                    // is it a eventmessage from a node?
-                    if (message is NodeEvent)
+                    if (br > 0)
                     {
-                        // yes, so add to eventqueue
-                        _eventQueue.Add((NodeEvent)message);
-                        // send ACK to controller
-                        _transmitQueue.Add(Message.ACK);
-                        // we're done
-                        continue;
+                        // print buffer
+
+                        Debug.WriteLine("Recv Buff: " + Message.ByteArrayToString(buffer, buffer.Length));
+                        // let's find out if it's valid.
+                        FrameHeader header = FrameHeader.TMO;
+
+                        while (buffer != null && buffer.Length > 0)
+                        {
+
+
+                            try
+                            {
+                                header = (FrameHeader)buffer[0];
+                            }
+                            catch (Exception ex)
+                            {
+                                // Frame out of Sync..
+
+                                // Let's ignore and move the fuck on for now.
+                                Debug.WriteLine(ex.ToString());
+                                continue;
+                            }
+                            if (header == FrameHeader.SOF)
+                            {
+
+                                byte length = buffer[1];
+                                var type = (MessageType)buffer[2];
+                                var function = (Function)buffer[3];
+                                var payload = buffer.Skip(4).Take(length - 3).ToArray();
+
+                                if (buffer.Skip(1).Take(length).Aggregate((byte)0xFF, (total, next) => (byte)(total ^ next)) != buffer[length + 1])
+                                    throw new ChecksumException("Checksum failure");
+                                // wait for message received (blocking)
+                                var message = Message.Read(header, length, type, function, payload);
+                                LogMessage($"Received: {message}");
+
+                                // ignore ACK, no processing of ACK needed
+                                if (message == Message.ACK)
+                                {
+                                    buffer = buffer.Skip(length + 1).ToArray();
+                                    continue;
+                                }
+
+                                // is it a eventmessage from a node?
+                                if (message is NodeEvent)
+                                {
+                                    // yes, so add to eventqueue
+                                    _eventQueue.Add((NodeEvent)message);
+                                    // send ACK to controller
+                                    _transmitQueue.Add(Message.ACK);
+                                    // we're done
+                                    buffer = buffer.Skip(length + 1).ToArray();
+                                    continue;
+                                }
+
+                                // not a event, so it's a response to a request
+                                _responseQueue.Add(message);
+                                // send ACK to controller
+                                _transmitQueue.Add(Message.ACK);
+                                buffer = buffer.Skip(length + 1).ToArray();
+                            }
+                            else
+                            {
+                                buffer = buffer.Skip(1).ToArray();
+                                if (header == FrameHeader.ACK)
+                                    continue;
+                                // need to retransmit.
+                                if (header == FrameHeader.NAK)
+                                {
+                                    _responseQueue.Add(Message.NAK);
+                                }
+                                if (header == FrameHeader.CAN)
+                                {
+                                    _responseQueue.Add(Message.CAN);
+                                }
+                                    
+
+
+                            }
+                        }
+
+
+
+                    }
+                    else
+                    {
+                        // nothing happened in 1 second..  Something wrong?
+                        Debug.WriteLine("Serial Port 1 second timeout on Read");
                     }
 
-                    // not a event, so it's a response to a request
-                    _responseQueue.Add(message);
-                    // send ACK to controller
-                    _transmitQueue.Add(Message.ACK);
+
+
+
+
+
                 }
                 catch (ChecksumException ex)
                 {
@@ -123,7 +214,8 @@ namespace ZWave.Channel
                 {
                     // probably out of sync on the serial port
                     // ToDo: handle gracefully 
-                    OnError(new ErrorEventArgs(ex));
+                    Debug.WriteLine(ex);
+                    //OnError(new ErrorEventArgs(ex));
                 }
                 catch (IOException)
                 {
@@ -189,7 +281,7 @@ namespace ZWave.Channel
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
-
+            //message.Write(Port.OutputStream);
             message.Write(Port.OutputStream).ConfigureAwait(false);
             LogMessage($"Transmitted: {message}");
         }
@@ -226,7 +318,10 @@ namespace ZWave.Channel
 
         public void Open()
         {
+
             Port.Open();
+
+
 
             _portReadTask.Start();
             _processEventsTask.Start();
@@ -298,6 +393,7 @@ namespace ZWave.Channel
 
         public Task<byte[]> Send(Function function, params byte[] payload)
         {
+
             return Exchange(async () =>
             {
                 var request = new ControllerFunction(function, payload);

@@ -114,6 +114,15 @@ namespace ZWave
             return _nodeID.Value;
         }
 
+        public async Task<byte[]> ContCmdGetRandom(byte BytesToGet)
+        {
+            var response = await Channel.Send(Function.GetRandom, new byte[1] { BytesToGet }); // 1 byte
+
+            response.Skip(2);
+
+            return response.Take(BytesToGet).ToArray();
+        }
+
 
         public async Task<byte> AddNode(bool secure)
         {

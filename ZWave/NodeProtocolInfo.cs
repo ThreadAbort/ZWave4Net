@@ -48,6 +48,7 @@ namespace ZWave
 
         public override string ToString()
         {
+            
             return $"GenericType = {GenericType}, BasicType = {BasicType}, Listening = {IsListening}, Version = {Version}, Security = [{Security}], Routing = {Routing}, MaxBaudrate = {MaxBaudrate}";
         }
     }

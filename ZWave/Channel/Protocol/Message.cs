@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Windows.Storage.Streams;
 
 namespace ZWave.Channel.Protocol
 {
@@ -12,6 +14,8 @@ namespace ZWave.Channel.Protocol
         public static readonly Message ACK = new Message(FrameHeader.ACK);
         public static readonly Message NAK = new Message(FrameHeader.NAK);
         public static readonly Message CAN = new Message(FrameHeader.CAN);
+        
+        public static Byte[] ToAppend = null;
 
         public readonly FrameHeader Header;
         public readonly MessageType? Type;
@@ -70,39 +74,19 @@ namespace ZWave.Channel.Protocol
             throw new NotSupportedException("Frameheader is not supported");
         }
 
-        public static async Task<Message> Read(Stream stream)
+        public static string ByteArrayToString(byte[] ba, int length)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
+            StringBuilder hex = new StringBuilder(length * 2);
+            foreach (byte b in ba)
+                hex.AppendFormat("{0:x2} ", b);
+            return hex.ToString();
+        }
 
-            var buffer = new byte[1024];
-            await stream.ReadAsyncExact(buffer, 0, 1);
-            var header = (FrameHeader)buffer[0];
-
-            switch (header)
-            {
-                case FrameHeader.ACK:
-                    return Message.ACK;
-                case FrameHeader.NAK:
-                    return Message.NAK;
-                case FrameHeader.CAN:
-                    return Message.CAN;
-            }
-
+        public static Message Read(FrameHeader header,int length, MessageType type, Function function, byte[] payload)
+        {
+            
             if (header == FrameHeader.SOF)
             {
-                await stream.ReadAsyncExact(buffer, 1, 1);
-                var length = buffer[1];
-
-                buffer = buffer.Take(length + 2).ToArray();
-                await stream.ReadAsyncExact(buffer, 2, length);
-
-                var type = (MessageType)buffer[2];
-                var function = (Function)buffer[3];
-                var payload = buffer.Skip(4).Take(length - 3).ToArray();
-
-                if (buffer.Skip(1).Take(buffer.Length - 2).Aggregate((byte)0xFF, (total, next) => (byte)(total ^ next)) != buffer[buffer.Length - 1])
-                    throw new ChecksumException("Checksum failure");
 
                 if (type == MessageType.Request)
                 {
@@ -124,6 +108,7 @@ namespace ZWave.Channel.Protocol
                 }
                 return new UnknownMessage(header, type, function, payload);
             }
+
             throw new UnknownFrameException($"Frame {header} is not supported");
         }
 

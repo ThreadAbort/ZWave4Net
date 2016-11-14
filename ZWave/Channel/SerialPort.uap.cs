@@ -16,10 +16,10 @@ namespace ZWave.Channel
     {
         private readonly string _id;
         private SerialDevice _device;
-        private Stream _inputStream;
+        private DataReader _inputStream;
         private Stream _outputStream;
 
-        public Stream InputStream
+        public DataReader InputStream
         {
             get { return _inputStream; }
         }
@@ -59,9 +59,14 @@ namespace ZWave.Channel
 
             _device.BaudRate = 115200;
             _device.Parity = SerialParity.None;
+            _device.ReadTimeout = TimeSpan.FromMilliseconds(100);
+            _device.WriteTimeout = TimeSpan.FromMilliseconds(100);
             _device.DataBits = 8;
             _device.StopBits = SerialStopBitCount.One;
-            _inputStream = new SerialReadStream(_device.InputStream);
+            
+            
+            _inputStream = new DataReader(_device.InputStream);
+            _inputStream.InputStreamOptions = InputStreamOptions.None;
             _outputStream = new SerialWriteStream(_device.OutputStream);
         }
 
@@ -120,7 +125,7 @@ namespace ZWave.Channel
                 try
                 {
                     var bytes = new byte[1024];
-                    _input.ReadAsync(bytes.AsBuffer(), (uint)count, InputStreamOptions.None).AsTask().Wait();
+                    _input.ReadAsync(bytes.AsBuffer(), (uint)count, InputStreamOptions.Partial).AsTask().Wait();
                     bytes.CopyTo(0, buffer.AsBuffer(), (uint)offset, count);
                     return count;
                 }
